@@ -111,7 +111,6 @@ def getTeq(Qin,p):
     physConst = getPhysConstants()
     return (Qin/(p['Atot']*p['epsT']*physConst['sigSB']))**0.25
 
-
 # return the view factor divided by fE=(RE/(RE+altitude))^2  
 # here fE = 1/h^2 
 def getF12h2(h,beta):
@@ -128,6 +127,7 @@ def getF12h2(h,beta):
     t2 = np.arctan(np.sin(brad)*z/x) 
     # print(x,y,z,t1,t2)
     return (t1+t2*h**2)/np.pi
+
 
 def getEffectiveAreas2U(h, beta):
     if ((beta<0)or(beta>180)):
@@ -371,24 +371,31 @@ def TempsPlot2(time1, temp1, c1, time2, temp2, c2, time3, temp3, c3, outfile="",
     # Plot the Temperature wrt time
     battTmin =  0.0
     battTmax = 40.0
+    # operating range for ClydeSpace batteries
+    battTmin = -10.0
+    battTmax =  40.0
     tempmax = []
     tempmin = []
     for int in range(0,len(time1)):
         tempmax.append(battTmax)
         tempmin.append(battTmin)
-    timeMin = np.array(time1)/60
+    timeMin = np.array(time1/60)
     
     fig, ax = plt.subplots()
-    fig.subplots_adjust(wspace=0.22, left=0.14, right=0.98, bottom=0.15, top=0.97)
+    fig.subplots_adjust(wspace=0.22, left=0.16, right=0.97, bottom=0.15, top=0.97)
 
     ax.tick_params(axis='both', which='major', labelsize=15)
     plt.plot(np.array(time1)/60,np.array(temp1)-KelToCel,label=c1, lw=3)
     plt.plot(np.array(time2)/60,np.array(temp2)-KelToCel,label=c2, lw=3)
     if (c3 != ""):
         plt.plot(np.array(time3)/60,np.array(temp3)-KelToCel,label=c3, lw=3)
-    plt.plot(np.array(time1)/60,tempmax, lw=1, c='black')
-    plt.plot(np.array(time1)/60,tempmin, lw=1, c='black')
-    ax.fill_between(timeMin, tempmin, tempmax, alpha=0.1) 
+    plt.plot(timeMin, battTmin+0*timeMin, lw=1, c='black')
+    plt.plot(timeMin, battTmax+0*timeMin, lw=1, c='black')
+    # ax.fill_between(timeMin, battTmin+0*timeMin, battTmax+0*timeMin, alpha=0.1) 
+    tt = np.linspace(0,96,960)
+    ax.fill_between(tt, battTmin+0*tt, battTmax+0*tt, alpha=0.1) 
+    print('pero2', np.max(np.array(time1)/60), np.max(np.array(time2)/60))
+
     plt.rc('legend',fontsize=12)  
     plt.legend(loc=1)
     plt.title(title)
@@ -412,6 +419,9 @@ def TempsPlotCompare(timeA, TempsA, timeN, TempsN, labelText, label2, outfile=""
     # Plot the Temperature wrt time
     battTmin =  0.0
     battTmax = 40.0
+    # operating range for ClydeSpace batteries
+    battTmin = -10.0
+    battTmax =  40.0
     tempmax = []
     tempmin = []
     for int in range(0,len(timeA)):
@@ -420,14 +430,16 @@ def TempsPlotCompare(timeA, TempsA, timeN, TempsN, labelText, label2, outfile=""
     timeMin = np.array(timeA)/60
     
     fig, ax = plt.subplots()
-    fig.subplots_adjust(wspace=0.22, left=0.16, right=0.98, bottom=0.16, top=0.97)
+    fig.subplots_adjust(wspace=0.22, left=0.18, right=0.97, bottom=0.17, top=0.97)
 
     ax.tick_params(axis='both', which='major', labelsize=20)
     plt.plot(np.array(timeA)/60,np.array(TempsA)-KelToCel,label=labelText, lw=3, c='b')
     plt.plot(np.array(timeN)/60,np.array(TempsN)-KelToCel,label=label2, lw=2, c='r', linestyle='dashed')
-    plt.plot(np.array(timeA)/60,tempmax, lw=1, c='black')
-    plt.plot(np.array(timeA)/60,tempmin, lw=1, c='black')
-    ax.fill_between(timeMin, tempmin, tempmax, alpha=0.1) 
+    plt.plot(np.array(timeN)/60, battTmin+0*timeMin, lw=1, c='black')
+    plt.plot(np.array(timeN)/60, battTmax+0*timeMin, lw=1, c='black')
+    # ax.fill_between(timeMin, tempmin, tempmax, alpha=0.1) 
+    print('pero', np.max(np.array(timeA)/60), np.max(np.array(timeN)/60))
+    ax.fill_between(np.array(timeN)/60, battTmin, battTmax, alpha=0.1) 
 
     plt.rc('legend',fontsize=15)  
     plt.legend(loc=1)
@@ -462,6 +474,362 @@ def printEqTemp(case, Temp, KelToCel):
 
 
 
+
+##########################################################################################
+#### additional 2nd generation tools for supporting variable satellite orientation 
+#### along beta=0 or 90 deg. sun-synchronous orbits
+
+
+### 1) for computing effective areas and other factors along an orbit
+
+def getAreasForOrbitImagingMode(XYphiAngle, beta0=True, nU=2, Norbit=3600): 
+    ## assume that -Z side with the camera is always pointing towards Earth 
+    ## and two possible sun-synchronous orbits: beta=0 and beta=90 
+    # aux helper
+    def phiEaux(phiS, alpha):
+        return 180-phiS - (1-phiS/90)*alpha
+
+    # angle along the orbit
+    alpha = np.linspace(0, 360, Norbit)
+    # orbital height parameter (h = (RE + altitude)/RE)
+    h = 1.0865
+    if beta0 == True: 
+        print('assuming beta=0 sun-synchronous orbit') 
+        ### define angles towards the Sun for a beta=0 orbit
+        if False:
+            # this is for Z- always pointing towards nadir: imaging mode
+            thetaS = np.where(alpha<180, alpha, 360-alpha)
+            # angles towards Earth when Z- always pointing towards nadir
+            thetaE = 180 + 0*alpha
+            phiE = XYphiAngle + 0*alpha 
+        else: 
+            # this is for solar sensor always pointing towards the Sun: sun seeker
+            thetaS = 90 + 0*alpha
+            # thetaE varies 
+            thetaE = np.where(alpha>90, np.abs(alpha-270), 90+alpha)
+            phiE = np.where(alpha<180, phiEaux(50,alpha), phiEaux(50,360-alpha))
+        # always pointing towards the Sun at fixed input angle
+        phiS = XYphiAngle + 0*alpha  # sun sensor on Y+ face
+        # maximum angle for eclipse (per Gilmore, eq.2.7 and 550 km orbit):
+        aMax = 66.96 # corresponds to 37% of orbit in eclipse, 36 min for 96 min orbit
+        # aMax = 56.52 # corresponds to 31% of orbit in eclipse, for beta=45 orbit 
+        eclipseFactor = np.where(np.abs(180-alpha)<aMax, 0, 1)
+        albedoFactor = np.where(alpha<180, GilmoreAlbedo(alpha), GilmoreAlbedo(360-alpha))  
+    else:
+        print('assuming beta=90 sun-synchronous orbit') 
+        # define angles towards the Sun for a beta=90 orbit
+        thetaS = 90 + 0*alpha
+        phiS = XYphiAngle + 0*alpha  
+        # angles towards Earth same for both cases
+        thetaE = 180 + 0*alpha
+        phiE = XYphiAngle + 0*alpha 
+        # these are trivial in this case
+        eclipseFactor = 1 + 0*alpha 
+        albedoFactor = GilmoreAlbedo(90) + 0*alpha 
+
+    # compute area for each of the six sides  
+    areaS = getEffectiveAreasCubeSat(1000, phiS, thetaS, nU)
+    areaE = getEffectiveAreasCubeSat(h, phiE, thetaE, nU) 
+    # and effective areas
+    etaS = getEffectiveEtasCubeSat(areaS, nU)
+    etaE = getEffectiveEtasCubeSat(areaE, nU)
+
+    return alpha, eclipseFactor, albedoFactor, areaS, areaE, etaS, etaE 
+
+def GilmoreAlbedo(thetaDeg):
+    # from Gilmore (2002):
+    return np.where(thetaDeg<99.99, (np.cos(0.9*thetaDeg/180*np.pi))**1.5, 0)
+
+
+## given a direction defined by spherical coordinate angles phideg and thetadeg, 
+## and a CubeSat aligned with the XYZ frame, return the six angles between the normal
+## direction at each face and this input direction; in other words, get the projection 
+## area factor (to be multiplied by the geometric area and absorptivity) 
+def getNormalAngles(phideg, thetadeg):
+    rad2deg = 180/np.pi
+    Cphi = np.cos(phideg/rad2deg)
+    Sphi = np.sin(phideg/rad2deg)
+    Ctheta = np.cos(thetadeg/rad2deg)
+    Stheta = np.sin(thetadeg/rad2deg)
+    beta = {}
+    beta['Xp'] = np.arccos(Stheta*Cphi)*rad2deg
+    beta['Xm'] = 180-beta['Xp']
+    beta['Yp'] = np.arccos(Stheta*Sphi)*rad2deg
+    beta['Ym'] = 180-beta['Yp']
+    beta['Zp'] = np.arccos(Ctheta)*rad2deg
+    beta['Zm'] = 180-beta['Zp']
+    return beta 
+
+## given the variation of phi and theta angles along an orbit,
+## return the effective areas for each side (assumes a string 
+## of nU basic 1U units) 
+def getEffectiveAreasCubeSat(h, phideg, thetadeg, nU=2):
+    angleArr = getNormalAngles(phideg, thetadeg)
+    area = {}  # in units of 1U areas
+    for s in ['Xp', 'Xm', 'Yp', 'Ym','Zp', 'Zm']:
+        area[s] = getArea(h, angleArr, s)
+    for s in ['Xp', 'Xm', 'Yp', 'Ym']:
+        area[s] *= nU 
+    return area 
+
+def getEffectiveEtasCubeSat(area, nU=2):
+    eta = area['Zp'] + area['Zm']
+    totArea = 2
+    for s in ['Xp', 'Xm', 'Yp', 'Ym']:
+        eta += area[s] 
+        totArea += nU
+    return eta/totArea
+
+def getArea(h, angles, side):
+    betaArr = angles[side]
+    Nsteps = np.size(betaArr)
+    A = np.zeros(Nsteps)
+    for i in range(0,Nsteps):
+        beta = betaArr[i]
+        A[i] = getF12h2(h, beta) 
+    return A
+
+def getEclipseFraction(betaOrbit, hOrbit=550):
+    # Gilmore (2002), eq. 2.7
+    physConst = getPhysConstants()
+    RE = physConst['RE'] # in km, so hOrbit in km, too
+    betaStar = np.arcsin(RE/(RE+hOrbit))/np.pi*180
+    if betaOrbit > betaStar:
+        return 0
+    else:
+        arg = np.sqrt(hOrbit**2+2*RE*hOrbit)/(RE+hOrbit)/np.cos(betaOrbit/180*np.pi)
+        fEclipse = np.arccos(arg)/np.pi 
+    return fEclipse
+
+### 2) for computing heating sources along an orbit
+
+# note that area returned by getEffectiveAreasCubeSat are in units of 1U (0.01 m2),
+# so realArea computed below is a multiplier to get the real area of a constant-alpha 
+# face component 
+def getSOCiRealAreas(SolarCells=False):
+    ### accounts for both Area1U = 0.01 m2 and for fractional coverage 
+    ## from Boone Tate
+    # Sides(2): 64% Solar Panel, 19% Aluminum Panels(outside), 17% aluminum frame rails
+    # Sides(2): 57% Solar Panel, 26% aluminum panel(outside), 17% aluminum frame rails
+    # Top: 60% Solar panel, 40% Aluminum frame
+    # Bottom: 38% aluminum frame, 62% PCB
+    ## from provided tables
+    alphaSolPan = 0.92
+    epsSolPan = 0.85 
+    CSolPan = 324
+    alphaAlPanOut = 0.87
+    epsAlPanOut = 0.81 
+    CAlPanOut = 801
+    alphaAlFrameR = 0.86 
+    epsAlFrameR = 0.86 
+    CAlFrameR = 768
+    alphaAlFrame = 0.08 
+    epsAlFrame = 0.15 
+    CAlFrame = 768
+    alphaPCB = 0.81 
+    epsPCB = 0.90 
+    CPCB = 1544
+
+    # should we take Kapton instead? per Table 2 in transients.pdf: 
+    if False:
+        alphaAlPanOut = 0.11
+        epsAlPanOut = 0.33
+
+    ## nominal area for 1U side in m2
+    area1U = 0.01 
+    realAreaFac = {}
+    realAlpha = {}
+    realEps = {}
+    if SolarCells:
+        realAreaFac['Xp'] = area1U * 0.64 
+        realAreaFac['Xm'] = area1U * 0.64 
+        realAreaFac['Yp'] = area1U * 0.57
+        realAreaFac['Ym'] = area1U * 0.57 
+        realAreaFac['Zp'] = area1U * 0.60
+        realAreaFac['Zm'] = area1U * 0.00 
+        for s in ['Xp', 'Xm', 'Yp', 'Ym','Zp', 'Zm']:
+            realAlpha[s] = alphaSolPan 
+            realEps[s] = epsSolPan 
+    else:
+        realAreaFac['Xp'] = area1U * 0.36
+        realAreaFac['Xm'] = realAreaFac['Xp']  
+        realAreaFac['Yp'] = area1U * 0.43 
+        realAreaFac['Ym'] = realAreaFac['Yp']  
+        realAreaFac['Zp'] = area1U * 0.40 
+        realAreaFac['Zm'] = area1U * 1.00 
+        realAlpha['Xp'] = (0.19*alphaAlPanOut+0.17*alphaAlFrameR)/(0.19+0.17) 
+        realAlpha['Xm'] = realAlpha['Xp'] 
+        realAlpha['Yp'] = (0.26*alphaAlPanOut+0.17*alphaAlFrameR)/(0.26+0.17) 
+        realAlpha['Ym'] = realAlpha['Yp'] 
+        realAlpha['Zp'] = alphaAlFrame
+        realAlpha['Zm'] = (0.62*alphaPCB+0.38*alphaAlFrame)/(0.62+0.38) 
+        realEps['Xp'] = (0.19*epsAlPanOut+0.17*epsAlFrameR)/(0.19+0.17) 
+        realEps['Xm'] = realAlpha['Xp'] 
+        realEps['Yp'] = (0.26*epsAlPanOut+0.17*epsAlFrameR)/(0.26+0.17) 
+        realEps['Ym'] = realAlpha['Yp'] 
+        realEps['Zp'] = epsAlFrame
+        realEps['Zm'] = (0.62*epsPCB+0.38*epsAlFrame)/(0.62+0.38) 
+
+    return realAreaFac, realAlpha, realEps 
+
+
+# it works both for solar cells and other areas (called twice) 
+def getQsunOrbit(p, area, realAreaFac, realAlpha, eclipseFactor):
+    Qsun = {}  
+    for s in ['Xp', 'Xm', 'Yp', 'Ym','Zp', 'Zm']:
+        Qsun[s] = realAreaFac[s] * area[s] * realAlpha[s] * p['Fsun'] * eclipseFactor
+    return Qsun
+
+def getQrefOrbit(p, area, realAreaFac, realAlpha, eclipseFactor, albedoFactor):
+    Qref = {}
+    for s in ['Xp', 'Xm', 'Yp', 'Ym','Zp', 'Zm']:
+        Qref[s] = realAreaFac[s]*area[s]*realAlpha[s]*p['fE']*albedoFactor*p['rhoE']*p['Fsun']*eclipseFactor
+    return Qref
+
+def getQIROrbit(p, area, realAreaFac, realAlpha):
+    QIR = {}
+    totA = 0 
+    totAalph = 0 
+    for s in ['Xp', 'Xm', 'Yp', 'Ym','Zp', 'Zm']:
+        QIR[s] = realAreaFac[s] * area[s] * realAlpha[s] * p['fE'] * p['FIR']  
+        totA += np.mean(realAreaFac[s]) * np.mean(area[s])
+        totAalph += np.mean(realAreaFac[s]) *  np.mean(area[s]) *  np.mean(realAlpha[s])
+    return QIR
+
+def getAllHeatQ(p):
+    return getQsun(p), getQref(p), getQIR(p), getQdissip(p)
+
+def sumQsForAllSides(QnotCell, Qcell, QrefNotCell, QrefCell, QIR, etaCell):
+    # sum input Q for all sides (including inefficiencies of solar cells)
+    QheatSol = 0*QnotCell['Xm']
+    QheatRef = 0*QnotCell['Xm']
+    QheatIR = 0*QnotCell['Xm']
+    Qcharge = 0*QnotCell['Xm'] 
+    for s in ['Xp', 'Xm', 'Yp', 'Ym','Zp', 'Zm']:
+        QheatSol += QnotCell[s] + (1-etaCell)*Qcell[s] 
+        QheatRef += QrefNotCell[s]  + (1-etaCell)*QrefCell[s]  
+        QheatIR += QIR[s]  
+        Qcharge += etaCell*(Qcell[s] + QrefCell[s]) 
+    return QheatSol, QheatRef, QheatIR, Qcharge 
+
+
+### 3) numerical solution from computed heating flux along the orbit 
+ 
+def getTsolution(alpha, Qheat, params, Tc, Pc, Niter=25):
+    # translate orbital angle to time in seconds
+    time = alpha / 360 * params['PorbMin'] * 60
+    Tstart = 273 
+    for k in range(0,Niter):
+        Temp, QheatTot = solveTforOrbit(Tstart, time, Qheat, params, Tc, Pc)
+        Tstart = 0.5*(Tstart+Temp[-1])
+    print('after', Niter, 'iterations, T tolerance = ', Tstart-Temp[-1], np.min(Temp), np.max(Temp))
+    return time/60, Temp, QheatTot
+
+def solveTforOrbit(T0, time, Qheat, params, Tc, Pc):
+    T = T0 + 0*time
+    emissivity = params['epsT'] 
+    Area = params['Atot']  
+    C = params['C'] 
+    mass = params['mass'] 
+    physConst = getPhysConstants()
+    sigmaSB = physConst['sigSB']
+    QheatTot = 1.0*Qheat
+    # direct integration with very tiny time steps assumed 
+    # time step controled by the orbital angle grid 
+    for i in range(1,np.size(time)):
+        if (T[i-1] < Tc):
+            QheatTot[i] = Qheat[i] + Pc
+        else:
+            QheatTot[i] = Qheat[i]
+        tStep = time[i]-time[i-1]    
+        T[i] = nextTempOrbit(T[i-1], tStep, QheatTot[i], C, mass, sigmaSB, emissivity, Area) 
+    return T, QheatTot
+    
+def nextTempOrbit(T, t_step, QheatingTotal, c, mass, sigma, emissivity, Area):
+    dTdt = (1/(c*mass))*(QheatingTotal-(sigma*(T**4)*emissivity*Area))
+    return T + dTdt*t_step
+
+### 4) new plots
+
+def TempsPlotOrbit(time1, temp1, c1, time2="", temp2="", c2="", time3="", temp3="", c3="", outfile="", title=""):
+    physConst = getPhysConstants()
+    KelToCel = physConst['KelToCel']
+    
+    # Plot the Temperature wrt time
+    battTmin =  0.0
+    battTmax = 40.0
+    # operating range for ClydeSpace batteries
+    # battTmin = -10.0
+    # battTmax =  50.0
+
+    fig, ax = plt.subplots()
+    fig.subplots_adjust(wspace=0.22, left=0.16, right=0.97, bottom=0.15, top=0.94)
+
+    ax.tick_params(axis='both', which='major', labelsize=15)
+    plt.plot(time1,temp1-KelToCel,label=c1, lw=3)
+    if (c2 != ""):
+        plt.plot(time2,temp2-KelToCel,label=c2, lw=3)
+    if (c3 != ""):
+        plt.plot(time3,temp3-KelToCel,label=c3, lw=3)
+    plt.plot(time1, 0*time1+battTmin, lw=1, c='black')
+    plt.plot(time1, 0*time1+battTmax, lw=1, c='black')
+    ax.fill_between(time1, battTmin, battTmax, alpha=0.1) 
+    # -10 deeper during eclipse
+    plt.plot([30, 66], [battTmin-20, battTmin-20], lw=1, c='black')
+    ax.fill_between([30, 66], battTmin-20, battTmin, alpha=0.1) 
+
+
+    plt.rc('legend',fontsize=12)  
+    plt.legend(loc=1)
+    plt.title(title)
+    plt.xlabel('Time (minute)', fontsize=18)
+    plt.ylabel('Temperature (C)', fontsize=18)
+    plt.ylim(-25, 65.0)
+
+    if (outfile == ""):
+        name = 'figures/TempsVsOrbitTime.png'
+    else:
+        name = 'figures/TempTimeOrbit' + outfile + '.png'
+    # plt.show()
+    plt.savefig(name)
+    print('made figure', name)
+    plt.close("all")
+    return 
+
+
+
+### PLOTTING 
+def TempsPowerOrbit(time1, temp1, c1, time2="", temp2="", c2="", time3="", temp3="", c3="", outfile="", title=""):
+   
+    fig, ax = plt.subplots()
+    fig.subplots_adjust(wspace=0.22, left=0.16, right=0.97, bottom=0.15, top=0.94)
+
+    ax.tick_params(axis='both', which='major', labelsize=15)
+    plt.plot(time1,temp1,label=c1, lw=3)
+    if (c2 != ""):
+        plt.plot(time2,temp2,label=c2, lw=3)
+    if (c3 != ""):
+        plt.plot(time3,temp3,label=c3, lw=3)
+   
+    plt.rc('legend',fontsize=12)  
+    plt.legend(loc=2)
+    plt.title(title)
+    plt.xlabel('Time (minute)', fontsize=18)
+    plt.ylabel('Power (W)', fontsize=18)
+    plt.plot([0, 30], [6, 6], lw=1, c='black')
+    plt.plot([66, 96], [6, 6], lw=1, c='black')
+    plt.text(0, 8.0, 'EPS: 6 W')
+    plt.ylim(-1, 65)
+
+    if (outfile == ""):
+        name = 'figures/PowerVsOrbitTime.png'
+    else:
+        name = 'figures/PowerTimeOrbit' + outfile + '.png'
+    # plt.show()
+    plt.savefig(name)
+    print('made figure', name)
+    plt.close("all")
+    return 
 
 
 
