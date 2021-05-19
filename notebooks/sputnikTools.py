@@ -394,7 +394,6 @@ def TempsPlot2(time1, temp1, c1, time2, temp2, c2, time3, temp3, c3, outfile="",
     # ax.fill_between(timeMin, battTmin+0*timeMin, battTmax+0*timeMin, alpha=0.1) 
     tt = np.linspace(0,96,960)
     ax.fill_between(tt, battTmin+0*tt, battTmax+0*tt, alpha=0.1) 
-    print('pero2', np.max(np.array(time1)/60), np.max(np.array(time2)/60))
 
     plt.rc('legend',fontsize=12)  
     plt.legend(loc=1)
@@ -438,7 +437,6 @@ def TempsPlotCompare(timeA, TempsA, timeN, TempsN, labelText, label2, outfile=""
     plt.plot(np.array(timeN)/60, battTmin+0*timeMin, lw=1, c='black')
     plt.plot(np.array(timeN)/60, battTmax+0*timeMin, lw=1, c='black')
     # ax.fill_between(timeMin, tempmin, tempmax, alpha=0.1) 
-    print('pero', np.max(np.array(timeA)/60), np.max(np.array(timeN)/60))
     ax.fill_between(np.array(timeN)/60, battTmin, battTmax, alpha=0.1) 
 
     plt.rc('legend',fontsize=15)  
